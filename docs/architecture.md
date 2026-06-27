@@ -320,8 +320,8 @@ flowchart TD
     parser --> command["PositionCommand"]
     command --> session["EngineSession::set_position"]
     session --> startpos["Position::startpos"]
-    startpos --> first_move["Position::apply_uci_move(\"e2e4\")"]
-    first_move --> second_move["Position::apply_uci_move(\"e7e5\")"]
+    startpos --> first_move["Position::apply_uci_move(&quot;e2e4&quot;)"]
+    first_move --> second_move["Position::apply_uci_move(&quot;e7e5&quot;)"]
 ```
 
 ### 9.4 Move selection
