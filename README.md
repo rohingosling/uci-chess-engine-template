@@ -3,7 +3,6 @@
 [![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Cargo](https://img.shields.io/badge/Cargo-000000?style=flat&logo=rust&logoColor=white)](https://doc.rust-lang.org/cargo/)
 [![UCI](https://img.shields.io/badge/UCI-374151?style=flat)](https://www.shredderchess.com/chess-info/features/uci-universal-chess-interface.html)
-[![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat)](#license)
 
 <div align="center">
   <img src="media/images/screenshots/test-game-1.png" alt="UCI Chess Engine Template running a test game in Arena" width="960">
@@ -250,4 +249,4 @@ Possible future selectors include material-only heuristics, minimax, alpha-beta 
 
 ## 📄 License
 
-Released under the [MIT License](LICENSE) — Copyright © 2026 Rohin Gosling.
+Released under the [MIT License](LICENSE) — Copyright © 2024 Rohin Gosling.
