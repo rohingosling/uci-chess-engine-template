@@ -1,0 +1,24 @@
+[package]
+name        = "uci-engine-template"
+version     = "1.0.0"
+edition     = "2021"
+authors     = [ "Rohin Gosling" ]
+license     = "MIT"
+description = "A minimal Rust UCI chess engine template that plays random legal moves."
+
+[lib]
+name = "uci_engine_template"
+path = "src/lib.rs"
+
+[[bin]]
+name = "uci-engine-template"
+path = "src/main.rs"
+
+[dependencies]
+cozy-chess = "0.3.4"
+rand       = "0.8"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+
