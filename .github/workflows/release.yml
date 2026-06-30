@@ -1,0 +1,141 @@
+# ---------------------------------------------------------------------------
+# Build and release UCI Chess Engine Template executables.
+#
+# What this does, and why it is here:
+#
+#   Triggered manually (workflow_dispatch). It resolves the release version from
+#   the RELEASE_VERSION repository variable, builds the release binary on
+#   GitHub's own hosted runners -- one per target OS -- then (re)creates the
+#   rolling GitHub Release v<version> and attaches each binary with signed SLSA
+#   build provenance.
+#
+#   Building in public CI (rather than uploading a binary built on a maintainer's
+#   machine) gives consumers an auditable, clean-room build with cryptographic
+#   provenance:
+#
+#       gh attestation verify uci-engine-template.exe --repo rohingosling/uci-chess-engine-template
+#
+#   Note: this is provenance, NOT Windows Authenticode code signing -- the
+#   SmartScreen "unknown publisher" prompt still appears (that needs a paid
+#   code-signing certificate).
+#
+# Version source:
+#
+#   vars.RELEASE_VERSION  (repo Settings -> Secrets and variables -> Actions ->
+#   Variables). Set once; every run reuses it. Override for a single run via the
+#   "version" input. The resolved value names the release tag (v<version>) and is
+#   stamped into the [package] version in Cargo.toml (so `--version` matches).
+# ---------------------------------------------------------------------------
+
+name: Build and release executables
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (blank = use the RELEASE_VERSION repo variable)'
+        required: false
+        default: ''
+
+permissions:
+  contents:     write   # create the Release and upload assets
+  id-token:     write   # OIDC token for provenance attestation
+  attestations: write   # write the signed provenance statement
+
+jobs:
+
+  # -------------------------------------------------------------------------
+  # Resolve the version and (re)create the rolling release at this commit.
+  # -------------------------------------------------------------------------
+
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag:     ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Resolve release version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          VAR_VERSION:   ${{ vars.RELEASE_VERSION }}
+        shell: bash
+        run: |
+          version="${INPUT_VERSION:-$VAR_VERSION}"
+          version="${version:-1.0.0}"   # hardcoded fallback if the variable is unset
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version"     >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: $version (tag v$version)"
+
+      - name: Recreate rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG:      ${{ steps.resolve.outputs.tag }}
+        shell: bash
+        run: |
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create "$TAG" \
+            --repo   "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title  "$TAG" \
+            --notes  "Automated clean-room build from GitHub Actions. Verify provenance with: gh attestation verify <binary> --repo $GITHUB_REPOSITORY"
+
+  # -------------------------------------------------------------------------
+  # Build each target OS and attach the binary to the release.
+  # -------------------------------------------------------------------------
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os:     windows-latest
+            label:  Windows (x64)
+            binary: uci-engine-template.exe
+          - os:     ubuntu-latest
+            label:  Linux (x64)
+            binary: uci-engine-template
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Stamp version into Cargo.toml
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python - "$VERSION" <<'PY'
+          import re, sys
+          version = sys.argv[1]
+          path    = "Cargo.toml"
+          text    = open(path, encoding="utf-8").read()
+          text    = re.sub(r'(?m)^(version\s*=\s*")[^"]*(")', r"\g<1>" + version + r"\2", text, count=1)
+          open(path, "w", encoding="utf-8").write(text)
+          print("stamped Cargo.toml [package] version =", version)
+          PY
+
+      - name: Run tests
+        run: cargo test --release
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: target/release/${{ matrix.binary }}
+
+      - name: Upload ${{ matrix.binary }} to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG:      ${{ needs.prepare.outputs.tag }}
+        shell: bash
+        run: gh release upload "$TAG" "target/release/${{ matrix.binary }}" --repo "$GITHUB_REPOSITORY" --clobber
